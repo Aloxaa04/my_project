@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Post, Media, Comment, Like, Follow, SavedPost
+from .models import Post, Media, Comment, Like, Follow, SavedPost, Story
 
 User = get_user_model()
 
@@ -20,12 +20,25 @@ class MediaSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     author_name = serializers.ReadOnlyField(source='author.username')
-    media = MediaSerializer(many=True, read_only=True) 
+    media = MediaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
         fields = ['id', 'author', 'author_name', 'caption', 'media', 'created_at']
         read_only_fields = ['author']
+
+class NoteSerializer(serializers.ModelSerializer):
+    author_name = serializers.ReadOnlyField(source='author.username')
+
+    class Meta:
+        model = Post
+        fields = ['id', 'author', 'author_name', 'caption', 'media', 'created_at']
+        read_only_fields = ['author']
+
+class StorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Story
+        fields = ["id", "user", "image", "video", "created_at", "expires_at"]
 
 class CommentSerializer(serializers.ModelSerializer):
     author_name = serializers.ReadOnlyField(source='author.username')

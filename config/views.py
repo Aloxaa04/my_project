@@ -1,10 +1,12 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
+from django.utils import timezone
+from rest_framework import permissions, viewsets
 from rest_framework import status
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
-from .models import Post, Media, Comment, Like, Follow, SavedPost
+from .models import Note, Post, Media, Comment, Like, Follow, SavedPost, Story
 from .serializers import *
 
 User = get_user_model()
@@ -32,7 +34,7 @@ def user_list(request):
 @permission_classes([IsAuthenticated])
 def user_detail(request, pk):
     user = get_object_or_404(User, pk=pk)
-    
+
     if request.method in ['PUT', 'DELETE'] and request.user != user:
         return Response({"detail": "Бұл әрекетке құқығыңыз жоқ (403)."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -67,11 +69,25 @@ def post_list_create(request):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def note_list_create(request):
+    if request.method == 'GET':
+        posts = Note.objects.all().order_by('-created_at')
+        serializer = NoteSerializer(posts, many=True)
+        return Response(serializer.data)
+    elif request.method == 'POST':
+        serializer = NoteSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(author=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def post_detail(request, pk):
     post = get_object_or_404(Post, pk=pk)
-    
+
     if request.method in ['PUT', 'DELETE'] and post.author != request.user:
         return Response({"detail": "Бұл сіздің постыңыз емес (403)."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -87,6 +103,37 @@ def post_detail(request, pk):
     elif request.method == 'DELETE':
         post.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def note_detail(request, pk):
+    note = get_object_or_404(Note, pk=pk)
+
+    if request.method in ['PUT', 'DELETE'] and note.author != request.user:
+        return Response({"detail": "Бұл сіздің постыңыз емес (403)."}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'GET':
+        serializer = NoteSerializer(note)
+        return Response(serializer.data)
+    elif request.method == 'PUT':
+        serializer = NoteSerializer(note, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    elif request.method == 'DELETE':
+        note.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class StoryViewSet(viewsets.ModelViewSet):
+    serializer_class = StorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Story.objects.filter(expires_at__gt=timezone.now())
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 # ==========================================
@@ -125,16 +172,16 @@ def comment_list_create(request):
 @permission_classes([IsAuthenticated])
 def comment_detail(request, pk):
     comment = get_object_or_404(Comment, pk=pk)
-    
+
     # GET үшін автор болу міндетті емес
     if request.method == 'GET':
         serializer = CommentSerializer(comment)
         return Response(serializer.data)
-        
+
     # PUT және DELETE үшін міндетті түрде автор болуы керек
     if comment.author != request.user:
         return Response({"detail": "Сіздің пікіріңіз емес (403)."}, status=status.HTTP_403_FORBIDDEN)
-        
+
     if request.method == 'PUT':
         serializer = CommentSerializer(comment, data=request.data, partial=True)
         if serializer.is_valid():
@@ -172,7 +219,7 @@ def like_toggle(request, post_id):
 @permission_classes([IsAuthenticated])
 def follow_user(request, pk):
     target_user = get_object_or_404(User, pk=pk)
-    
+
     if request.method == 'GET':
         follow = Follow.objects.filter(follower=request.user, followee=target_user).first()
         if follow:
@@ -182,7 +229,7 @@ def follow_user(request, pk):
 
     if request.user == target_user:
         return Response({"error": "Өзіңізге жазыла алмайсыз"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     if request.method == 'POST':
         follow, created = Follow.objects.get_or_create(follower=request.user, followee=target_user)
         if created:
@@ -227,18 +274,18 @@ def save_post(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def media_upload(request):
-    
+
     post_id = request.data.get('post')
     if not post_id:
          return Response({"error": "Пост ID-і міндетті."}, status=status.HTTP_400_BAD_REQUEST)
-         
+
     post = get_object_or_404(Post, pk=post_id)
     if post.author != request.user:
         return Response({"detail": "Бөгде постқа медиа жүктей алмайсыз (403)."}, status=status.HTTP_403_FORBIDDEN)
-        
+
     if 'file' not in request.FILES:
         return Response({"error": "Файл жіберілмеді ('file' кілті)."}, status=status.HTTP_400_BAD_REQUEST)
-        
+
     media = Media.objects.create(post=post, file=request.FILES['file'])
     serializer = MediaSerializer(media)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -247,11 +294,11 @@ def media_upload(request):
 @permission_classes([IsAuthenticated])
 def media_detail(request, pk):
     media = get_object_or_404(Media, pk=pk)
-    
+
     if request.method == 'GET':
         serializer = MediaSerializer(media)
         return Response(serializer.data)
-        
+
     elif request.method == 'DELETE':
         if media.post.author != request.user:
             return Response({"detail": "Құқығыңыз жоқ (403)."}, status=status.HTTP_403_FORBIDDEN)
@@ -262,8 +309,8 @@ def media_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def news_feed(request):
     following_ids = Follow.objects.filter(follower=request.user).values_list('followee_id', flat=True)
-    
+
     posts = Post.objects.filter(author_id__in=following_ids).order_by('-created_at')
-    
+
     serializer = PostSerializer(posts, many=True)
     return Response(serializer.data)
