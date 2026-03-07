@@ -38,7 +38,7 @@ class NoteSerializer(serializers.ModelSerializer):
 class StorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Story
-        fields = ["id", "user", "image", "video", "created_at", "expires_at"]
+        fields = ["id", "image", "video", "created_at"]
 
 class CommentSerializer(serializers.ModelSerializer):
     author_name = serializers.ReadOnlyField(source='author.username')
