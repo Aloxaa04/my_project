@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -29,7 +29,7 @@ urlpatterns = [
     path('api/notes/', views.note_list_create, name='note_list_create'),
     path('api/notes/<int:pk>/', views.note_detail, name='note_detail'),
 
-    path('api/', include(router.urls))
+    path('api/', include(router.urls)),
 
     # === 4. LIKES ===
     path('api/posts/<int:post_id>/like/', views.like_toggle, name='like_toggle'),
