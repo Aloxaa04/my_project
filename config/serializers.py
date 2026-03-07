@@ -32,7 +32,7 @@ class NoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'author_name', 'caption', 'media', 'created_at']
+        fields = ['id', 'author', 'author_name', 'caption', 'created_at']
         read_only_fields = ['author']
 
 class StorySerializer(serializers.ModelSerializer):
